@@ -1,4 +1,4 @@
-import "intl-pluralrules"; // Import the polyfill at the top
+import "intl-pluralrules"; 
 import i18next from "i18next";
 import { initReactI18next } from "react-i18next";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -8,7 +8,8 @@ import tr from "./locales/tr.json";
 
 const getSavedLanguage = async () => {
   const lng = await AsyncStorage.getItem("selectedLanguage");
-  return lng || "en"; // Default to English
+  //return lng || "en"; // Default to English
+  return 'tr'
 };
 
 getSavedLanguage().then((lng) => {

@@ -21,7 +21,7 @@ const CarouselComponent = ({ navigation }) => {
   const handleFinishCarousel = () => {
     // Navigate to the Home screen when the carousel is finished
 
-    navigation.navigate("Home");
+    navigation.navigate("BottomTabsNavigator");
   };
 
   return (

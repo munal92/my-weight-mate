@@ -8,4 +8,5 @@ export default {
   icongradient1: "#8E42D3",
   icongradient2: "#D46975",
   iconfontcolor: "#341930",
+  bottomTabBlack:"#333333"
 };
