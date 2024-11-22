@@ -116,10 +116,10 @@ const App = () => {
   return (
     <NavigationContainer>
       <Stack.Navigator
-        initialRouteName="Carousel"
+        // initialRouteName="Carousel"
         screenOptions={{ headerShown: false }}
       >
-        <Stack.Screen name="Carousel" component={CarouselComponent} />
+        {/* <Stack.Screen name="Carousel" component={CarouselComponent} /> */}
         <Stack.Screen
           name="BottomTabsNavigator"
           options={{ headerShown: false }}

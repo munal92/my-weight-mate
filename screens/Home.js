@@ -15,7 +15,8 @@ const Home = ({ navigation,isLoading,setIsLoading }) => {
     setTimeout(() => {
       setIsLoading(false); // Hide loading indicator after 5 seconds
      // navigation.navigate("Home");
-    }, 1000); // 5000 milliseconds = 5 seconds
+    }, 0); // 5000 milliseconds = 5 seconds
+    // }, 1000); // 5000 milliseconds = 5 seconds
   }, []);
 
   if (isLoading) {
