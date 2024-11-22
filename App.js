@@ -5,7 +5,7 @@ import { createStackNavigator } from "@react-navigation/stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import CarouselComponent from "./components/ui/CarouselComponent.js";
 import Home from "./screens/Home.js"; // Import the Home component
-import ProfilesScreen from "./screens/ProfilesScreen.js"
+import ProfilesScreen from "./screens/ProfilesScreen.js";
 import SettingsScreen from "./screens/SettingsScreen.js";
 import LoadingIndicator from "./helpers/LoadingIndicator.js";
 import {
@@ -21,6 +21,11 @@ import { I18nextProvider } from "react-i18next";
 import i18next from "./i18n";
 import { useTranslation } from "react-i18next";
 import colors from "./styles/colors.js";
+
+import { Dimensions } from "react-native";
+
+// Screen width
+const screenHeight = Dimensions.get("window").height;
 
 const BottomTabs = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -40,21 +45,16 @@ function BottomTabsNavigator({ isLoading, setIsLoading }) {
         ),
         tabBarStyle: {
           display: isLoading ? "none" : "flex", // Hide tab bar when loading
-          backgroundColor:colors.bottomTabBlack,
-          borderTopRightRadius:14,
-          borderTopLeftRadius:14,
-          height: 60, // Increase height of the tab bar
-         
+          backgroundColor: colors.bottomTabBlack,
+          borderTopRightRadius: 30,
+          borderTopLeftRadius: 30,
+          height: (20 * screenHeight) / 200, // Increase height of the tab bar
+          paddingTop: (3 * screenHeight) / 200,
         },
         tabBarActiveTintColor: colors.background, // Set color when the tab is selected
-        tabBarInactiveTintColor: 'white', // Set color when the tab is unselected
-       
+        tabBarInactiveTintColor: colors.textSecondary, // Set color when the tab is unselected
       }}
-
     >
-     
-
-
       <BottomTabs.Screen
         name="Profiles" // Static screen name
         component={ProfilesScreen}
@@ -63,18 +63,18 @@ function BottomTabsNavigator({ isLoading, setIsLoading }) {
           title: t("Profiles"),
           tabBarLabel: t("Profiles"),
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="people-sharp" size={26} color={color} /> // Increased size
+            <Ionicons name="people-sharp" size={28} color={color} /> // Increased size
           ),
         }}
       />
- <BottomTabs.Screen
+      <BottomTabs.Screen
         name="Home" // Static screen name
         options={{
           headerShown: false,
           title: t("Home"),
           tabBarLabel: t("Home"),
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="home" size={26} color={color} /> // Increased size
+            <Ionicons name="home" size={28} color={color} /> // Increased size
           ),
         }}
       >
@@ -82,7 +82,7 @@ function BottomTabsNavigator({ isLoading, setIsLoading }) {
           <Home {...props} isLoading={isLoading} setIsLoading={setIsLoading} />
         )}
       </BottomTabs.Screen>
-<BottomTabs.Screen
+      <BottomTabs.Screen
         name="Settings" // Static screen name
         component={SettingsScreen}
         options={{
@@ -90,7 +90,7 @@ function BottomTabsNavigator({ isLoading, setIsLoading }) {
           title: t("Settings"),
           tabBarLabel: t("Settings"),
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="settings" size={26} color={color} /> // Increased size
+            <Ionicons name="settings" size={28} color={color} /> // Increased size
           ),
         }}
       />
