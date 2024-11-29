@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useLayoutEffect } from "react";
 import {
   View,
   Text,
@@ -11,6 +11,9 @@ import { LineChart } from "react-native-chart-kit";
 import { Dimensions } from "react-native";
 import { useTranslation } from "react-i18next";
 import moment from "moment";
+
+import "moment/locale/tr";
+import "moment/locale/es";
 import colors from "../../styles/colors";
 
 // Screen width
@@ -34,14 +37,16 @@ const mockData = [
   { date: "2024-09-01", weight: 73 },
   { date: "2024-09-05", weight: 74 },
   { date: "2024-09-15", weight: 72 },
+  { date: "2024-10-15", weight: 72 },
   { date: "2024-11-13", weight: 69.8 },
   { date: "2024-11-14", weight: 69.9 },
   { date: "2024-11-15", weight: 70.1 },
   { date: "2024-11-16", weight: 70.2 },
-  { date: "2024-11-17", weight: 70.3 },
-  { date: "2024-11-18", weight: 70.4 },
-  { date: "2024-11-19", weight: 70.5 },
+  { date: "2024-11-24", weight: 70.3 },
+  { date: "2024-11-26", weight: 70.4 },
+  { date: "2024-11-27", weight: 70.5 },
   { date: "2024-11-20", weight: 70.6 },
+  { date: "2024-12-20", weight: 70.6 },
 ];
 
 const WeightGraphScreen = () => {
@@ -55,6 +60,12 @@ const WeightGraphScreen = () => {
   const [current3Months, setCurrent3Months] = useState(
     moment().startOf("month").subtract(2, "months")
   );
+
+  // // Ensure moment locale matches i18n.language
+  useEffect(() => {
+    console.log("GIRDI ", i18n.language);
+    moment.locale(i18n.language); // Set moment's locale dynamically
+  }, [i18n.language]);
 
   // Filter data based on selected period
   const filterData = (period) => {
@@ -79,7 +90,7 @@ const WeightGraphScreen = () => {
         });
         break;
       }
-      case "3months": {
+      case "3 Months": {
         const startOf3Months = current3Months.clone().startOf("month");
         const endOf3Months = current3Months
           .clone()
@@ -112,7 +123,22 @@ const WeightGraphScreen = () => {
 
   useEffect(() => {
     filterData(selectedPeriod);
+    console.log("Current Language: ", i18n.language);
   }, [selectedPeriod, currentWeek, currentMonth, currentYear, current3Months]);
+
+  // useLayoutEffect(() => {
+  //   moment.locale(i18n.language); // Update moment's locale based on the selected language
+  // }, [i18n.language]);
+
+  const [language, setLanguage] = useState(i18n.language);
+
+  useEffect(() => {
+    setLanguage(i18n.language); // Update state when language changes
+  }, [i18n.language]);
+
+  useEffect(() => {
+    moment.locale(language); // Update moment locale based on state
+  }, [language]);
 
   // Format the date for labels
   const formatDate = (date1) => {
@@ -140,9 +166,32 @@ const WeightGraphScreen = () => {
     setCurrent3Months(current3Months.clone().add(direction, "months"));
   };
 
+  const generateyaxislabels = () => {
+    if (selectedPeriod === "3 Months" || selectedPeriod === "yearly") {
+      let monthlabels = [];
+      filteredData.map((entry) => {
+        if (!monthlabels.includes(moment(entry.date).format("MMM"))) {
+          monthlabels.push(moment(entry.date).format("MMM"));
+        }
+      });
+
+      if (monthlabels.length > 8) {
+        const filteredMonths = monthlabels.filter((item, indx) => {
+          if (indx % 2 == 0) {
+            return item;
+          }
+        });
+        return filteredMonths;
+      }
+
+      return monthlabels;
+    }
+
+    return filteredData.map((entry) => formatDate(entry.date));
+  };
   // Graph data for rendering the chart
   const graphData = {
-    labels: filteredData.map((entry) => formatDate(entry.date)),
+    labels: generateyaxislabels(),
     datasets: [
       {
         data: filteredData
@@ -177,7 +226,7 @@ const WeightGraphScreen = () => {
     if (selectedPeriod === "monthly") {
       return currentMonth.format("MMMM YYYY");
     }
-    if (selectedPeriod === "3months") {
+    if (selectedPeriod === "3 Months") {
       const startMonth = current3Months.clone().format("MMM");
       const endMonth = current3Months.clone().add(2, "months").format("MMM");
       return `${startMonth}-${endMonth}`;
@@ -190,34 +239,52 @@ const WeightGraphScreen = () => {
   const renderCard = ({ item }) => {
     return (
       <View style={styles.card}>
-        <Text style={styles.date}>{item.date}</Text>
+        <Text style={styles.date}>
+          {moment(item.date).format("dddd")}, {moment(item.date).format("MMMM")}{" "}
+          {moment(item.date).format("DD")}
+        </Text>
         <Text style={styles.weight}>{item.weight} kg</Text>
       </View>
     );
   };
 
   return (
-    <View style={{ flex: 1, justifyContent: "flex-start", padding: 20 }}>
-      <Text style={{ fontSize: 20, marginBottom: 20 }}>Weight Tracker</Text>
+    <View
+      style={{
+        flex: 1,
+        justifyContent: "flex-start",
+        padding: 20,
+        width: "100%",
+      }}
+    >
+      <Text style={{ fontSize: 20, marginBottom: 20 }}>ME</Text>
 
       {/* Period buttons */}
-      <View style={{ flexDirection: "row", marginBottom: 20 }}>
-        {["weekly", "monthly", "3months", "yearly"].map((period) => (
+      <View
+        style={{
+          flexDirection: "row",
+          marginBottom: 20,
+          justifyContent: "space-between",
+          alignItems: "center",
+        }}
+      >
+        {["weekly", "monthly", "3 Months", "yearly"].map((period) => (
           <TouchableOpacity
             key={period}
             style={{
-              marginRight: 20,
-              padding: 10,
-              backgroundColor:
-                selectedPeriod === period ? "#4CAF50" : "#97B098",
-              borderRadius: 5,
+              backgroundColor: "transparent",
+
+              borderBottomLeftRadius: 5,
+              borderBottomRightRadius: 5,
+              borderBottomWidth: selectedPeriod === period ? 2 : 0,
+              borderBottomColor: colors.secondary,
             }}
             onPress={() => {
               setSelectedPeriod(period);
               filterData(period);
             }}
           >
-            <Text style={{ color: "#fff" }}>
+            <Text style={{ color: "black", marginBottom: 5 }}>
               {t(period.charAt(0).toUpperCase() + period.slice(1))}
             </Text>
           </TouchableOpacity>
@@ -227,8 +294,9 @@ const WeightGraphScreen = () => {
       <FlatList
         data={filteredData} // Pass your data here
         renderItem={renderCard} // Card rendering function
-        keyExtractor={(item, index) => index.toString()} // Unique key for each item
+        keyExtractor={(item, index) => index.toString() + i18n.language} // Unique key for each item
         contentContainerStyle={styles.listContainer} // Styling for the list container
+        showsVerticalScrollIndicator={false}
         ListHeaderComponent={
           <>
             <View
@@ -240,40 +308,62 @@ const WeightGraphScreen = () => {
             >
               <TouchableOpacity
                 style={{
-                  padding: 10,
-                  backgroundColor: "#4CAF50",
+                  backgroundColor: "transparent",
+
                   borderRadius: 5,
+                  width: 50,
+                  height: 30,
+                  justifyContent: "center",
                 }}
                 onPress={() => {
                   if (selectedPeriod === "weekly") changeWeek(-1);
                   else if (selectedPeriod === "monthly") changeMonth(-1);
                   else if (selectedPeriod === "yearly") changeYear(-1);
-                  else if (selectedPeriod === "3months") change3Months(-3);
+                  else if (selectedPeriod === "3 Months") change3Months(-3);
                   filterData(selectedPeriod);
                 }}
               >
-                <Text style={{ color: "#fff" }}>{"<"}</Text>
+                <Text
+                  style={{ color: "black", fontSize: 24, fontWeight: "400" }}
+                >
+                  {"<"}
+                </Text>
               </TouchableOpacity>
 
-              <Text style={{ flex: 1, textAlign: "center", fontSize: 16 }}>
+              <Text
+                style={{
+                  flex: 1,
+                  textAlign: "center",
+                  fontSize: 16,
+                  fontWeight: "400",
+                }}
+              >
                 {renderPeriodLabel()}
               </Text>
 
               <TouchableOpacity
                 style={{
-                  padding: 10,
-                  backgroundColor: "#4CAF50",
+                  backgroundColor: "transparent",
+
+                  justifyContent: "center",
+                  alignItems: "flex-end",
                   borderRadius: 5,
+                  width: 50,
+                  height: 30,
                 }}
                 onPress={() => {
                   if (selectedPeriod === "weekly") changeWeek(1);
                   else if (selectedPeriod === "monthly") changeMonth(1);
                   else if (selectedPeriod === "yearly") changeYear(1);
-                  else if (selectedPeriod === "3months") change3Months(3);
+                  else if (selectedPeriod === "3 Months") change3Months(3);
                   filterData(selectedPeriod);
                 }}
               >
-                <Text style={{ color: "#fff" }}>{">"}</Text>
+                <Text
+                  style={{ color: "black", fontSize: 24, fontWeight: "400" }}
+                >
+                  {">"}
+                </Text>
               </TouchableOpacity>
             </View>
             {filteredData.length === 0 ? (
@@ -281,28 +371,35 @@ const WeightGraphScreen = () => {
             ) : (
               <LineChart
                 data={graphData}
-                width={screenWidth - 45}
+                width={screenWidth - 25}
                 height={220}
                 style={{
                   borderRadius: 10, // Add border radius
                   overflow: "hidden", // Ensure content inside follows border radius
-                  shadowColor: "transparent", // Remove shadow for iOS
+                  shadowColor: "black", // Remove shadow for iOS
                   elevation: 0, // Remove shadow for Android
-                  backgroundColor: "#333333",
-                  paddingTop: 14,
-                  marginBottom: 14,
+                  // backgroundColor: "#333333",
+                  alignItems: "center",
+                  paddingRight: 50,
+                  paddingLeft: 40,
+                  backgroundColor: "aqua",
+                  backgroundColor: "transparent",
                 }}
                 chartConfig={{
-                  labelColor: () => "#ffffff", // Text color for labels
+                  labelColor: () => "black", // Text color for labels
+
                   propsForBackgroundLines: {
-                    stroke: "transparent", // Removes grid lines
+                    stroke: "black", // Set the color for horizontal grid lines
+
+                    strokeWidth: 1, // Optional: Adjust thickness of lines
+                    strokeDasharray: "4, 4", // Optional: Dashed horizontal lines
                   },
 
-                  backgroundGradientFrom: "#333333", // Background gradient start color
-                  backgroundGradientTo: "#333333", // Background gradient end color
+                  backgroundGradientFrom: "black", // Background gradient start color
+                  backgroundGradientTo: "black", // Background gradient end color
                   backgroundGradientFromOpacity: 0,
                   backgroundGradientToOpacity: 0,
-                  fillShadowGradient: "transparent", // Removes gradient below the line
+                  fillShadowGradient: "black", // Removes gradient below the line
                   fillShadowGradientOpacity: 0, // Fully transparent fill gradient
                   fillShadowGradientToOpacity: 0,
 
@@ -310,13 +407,16 @@ const WeightGraphScreen = () => {
                   color: () => colors.secondary, // Line color
                   propsForDots: {
                     r: "3", // Dot radius
-                    strokeWidth: "0", // Removes border from dots
-                    stroke: "transparent", // Ensures no shadow around dots
+                    strokeWidth: "4", // Removes border from dots
+                    opacity: "0.4",
+                    stroke: "white", // Ensures no shadow around dots
                   },
                 }}
-                bezier={false} // Ensure no smoothing effect adds artifacts
-                withInnerLines={false} // Explicitly remove inner grid lines
-                withOuterLines={false} // Explicitly remove outer grid lines
+                bezier={true} // Ensure no smoothing effect adds artifacts
+                withInnerLines={true} // Ensure horizontal grid lines are shown
+                withOuterLines={false} // Optional: Remove outer border lines
+                withVerticalLines={false} // Disable vertical lines
+                withHorizontalLines={true} // Ensure horizontal lines are displayed
                 onDataPointClick={(data) => handleDataPointClick(data)}
               />
             )}
@@ -330,15 +430,15 @@ const WeightGraphScreen = () => {
 const styles = StyleSheet.create({
   listContainer: {},
   card: {
-    backgroundColor: "#f8f8f8", // Light background for the card
-    padding: 16, // Inner padding for content
-    marginBottom: 12, // Space between cards
+    // backgroundColor: "#f8f8f8", // Light background for the card
+    // padding: 16, // Inner padding for content
+    marginVertical: 18, // Space between cards
     borderRadius: 8, // Rounded corners
-    shadowColor: "#000", // Shadow color
-    shadowOffset: { width: 0, height: 2 }, // Shadow positioning
-    shadowOpacity: 0.2, // Shadow transparency
-    shadowRadius: 4, // Shadow blur radius
-    elevation: 4, // Shadow for Android
+    // shadowColor: "#000", // Shadow color
+    // shadowOffset: { width: 0, height: 2 }, // Shadow positioning
+    // shadowOpacity: 0.2, // Shadow transparency
+    // shadowRadius: 4, // Shadow blur radius
+    // elevation: 4, // Shadow for Android
   },
   date: {
     fontSize: 16, // Font size for the date
