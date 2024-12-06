@@ -1,4 +1,4 @@
-import React, { useLayoutEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 
 import { NavigationContainer } from "@react-navigation/native";
 import { createStackNavigator } from "@react-navigation/stack";
@@ -23,6 +23,8 @@ import { useTranslation } from "react-i18next";
 import colors from "./styles/colors.js";
 
 import { Dimensions } from "react-native";
+import Profile from "./sql.js";
+import { initializeDb } from "./profileService.js";
 
 // Screen width
 const screenHeight = Dimensions.get("window").height;
@@ -31,7 +33,15 @@ const BottomTabs = createBottomTabNavigator();
 const Stack = createStackNavigator();
 
 function BottomTabsNavigator({ isLoading, setIsLoading }) {
+  
+
+
   const { t, i18n } = useTranslation();
+
+
+
+
+
   return (
     <BottomTabs.Navigator
       initialRouteName="Home"
@@ -99,6 +109,12 @@ function BottomTabsNavigator({ isLoading, setIsLoading }) {
 }
 
 const App = () => {
+  useEffect(() => {
+    const setupDb = async () => {
+      await initializeDb();  // Initialize database and create tables
+    };
+    setupDb();
+  }, []);
   const [isLoading, setIsLoading] = useState(true);
   const [fontsLoaded] = useFonts({
     Barlow_300Light,
@@ -112,6 +128,11 @@ const App = () => {
   if (!fontsLoaded) {
     return <LoadingIndicator />;
   }
+
+
+  return(
+    <Profile />
+  )
 
   return (
     <NavigationContainer>
