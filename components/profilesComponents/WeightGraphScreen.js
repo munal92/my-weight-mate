@@ -15,6 +15,7 @@ import moment from "moment";
 import "moment/locale/tr";
 import "moment/locale/es";
 import colors from "../../styles/colors";
+import GraphView from "./GraphView";
 
 // Screen width
 const screenWidth = Dimensions.get("window").width;
@@ -49,8 +50,11 @@ const mockData = [
   { date: "2024-12-20", weight: 70.6 },
 ];
 
-const WeightGraphScreen = () => {
-  const [selectedPeriod, setSelectedPeriod] = useState("weekly");
+const WeightGraphScreen = ({ isJustYearly = false }) => {
+  console.log(isJustYearly);
+  const [selectedPeriod, setSelectedPeriod] = useState(
+    isJustYearly ? "yearly" : "weekly"
+  );
   const [filteredData, setFilteredData] = useState(mockData);
   const { t, i18n } = useTranslation();
   const [selectedPoint, setSelectedPoint] = useState(null);
@@ -236,6 +240,28 @@ const WeightGraphScreen = () => {
     }
   };
 
+  if (isJustYearly) {
+    return (
+      <>
+        {filteredData.length === 0 ? (
+          <Text>No data found for this period</Text>
+        ) : (
+          <GraphView
+            graphData={graphData}
+            paddingR={55}
+            paddingL={50}
+            graphBgColor={colors.profileGraphbg}
+            labelTextColor="white"
+            gridColor="transparent"
+            lineColor="white"
+            dotColor="transparent"
+            graphPadding={10}
+          />
+        )}
+      </>
+    );
+  }
+
   const renderCard = ({ item }) => {
     return (
       <View style={styles.card}>
@@ -369,56 +395,7 @@ const WeightGraphScreen = () => {
             {filteredData.length === 0 ? (
               <Text>No data found for this period</Text>
             ) : (
-              <LineChart
-                data={graphData}
-                width={screenWidth - 25}
-                height={220}
-                style={{
-                  borderRadius: 10, // Add border radius
-                  overflow: "hidden", // Ensure content inside follows border radius
-                  shadowColor: "black", // Remove shadow for iOS
-                  elevation: 0, // Remove shadow for Android
-                  // backgroundColor: "#333333",
-                  alignItems: "center",
-                  paddingRight: 50,
-                  paddingLeft: 40,
-                  backgroundColor: "aqua",
-                  backgroundColor: "transparent",
-                }}
-                chartConfig={{
-                  labelColor: () => "black", // Text color for labels
-
-                  propsForBackgroundLines: {
-                    stroke: "black", // Set the color for horizontal grid lines
-
-                    strokeWidth: 1, // Optional: Adjust thickness of lines
-                    strokeDasharray: "4, 4", // Optional: Dashed horizontal lines
-                  },
-
-                  backgroundGradientFrom: "black", // Background gradient start color
-                  backgroundGradientTo: "black", // Background gradient end color
-                  backgroundGradientFromOpacity: 0,
-                  backgroundGradientToOpacity: 0,
-                  fillShadowGradient: "black", // Removes gradient below the line
-                  fillShadowGradientOpacity: 0, // Fully transparent fill gradient
-                  fillShadowGradientToOpacity: 0,
-
-                  decimalPlaces: 1,
-                  color: () => colors.secondary, // Line color
-                  propsForDots: {
-                    r: "3", // Dot radius
-                    strokeWidth: "4", // Removes border from dots
-                    opacity: "0.4",
-                    stroke: "white", // Ensures no shadow around dots
-                  },
-                }}
-                bezier={true} // Ensure no smoothing effect adds artifacts
-                withInnerLines={true} // Ensure horizontal grid lines are shown
-                withOuterLines={false} // Optional: Remove outer border lines
-                withVerticalLines={false} // Disable vertical lines
-                withHorizontalLines={true} // Ensure horizontal lines are displayed
-                onDataPointClick={(data) => handleDataPointClick(data)}
-              />
+              <GraphView graphData={graphData} />
             )}
           </>
         }

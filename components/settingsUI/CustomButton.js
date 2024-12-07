@@ -2,15 +2,18 @@ import React from "react";
 import { View, Text, StyleSheet, Pressable } from "react-native";
 import colors from "../../styles/colors";
 import { Ionicons } from "@expo/vector-icons";
-export default function CustomButton({btnText}) {
+export default function CustomButton({
+  btnText,
+  notification_name = "notifications-outline",
+}) {
   return (
-    <Pressable 
+    <Pressable
       style={({ pressed }) => [
-        styles.buttonContainer, 
-        pressed && styles.buttonPressed // Apply this style when pressed
+        styles.buttonContainer,
+        pressed && styles.buttonPressed, // Apply this style when pressed
       ]}
     >
-         <Ionicons name="notifications-outline" size={24} color="white" />
+      <Ionicons name={notification_name} size={24} color="white" />
       <Text style={styles.buttonText}>{btnText}</Text>
     </Pressable>
   );
@@ -18,21 +21,21 @@ export default function CustomButton({btnText}) {
 
 const styles = StyleSheet.create({
   buttonContainer: {
-    flexDirection:"row",
+    flexDirection: "row",
     justifyContent: "flex-start",
     alignItems: "center",
     backgroundColor: colors.textPrimary,
     paddingVertical: 12, // Add padding for better touch area
     paddingHorizontal: 12, // Add padding for better touch area
     borderRadius: 10, // Optional: add rounded corners
-    height:60,
-    marginVertical:10
+    height: 60,
+    marginVertical: 10,
   },
   buttonText: {
     fontSize: 14,
     fontWeight: "bold",
     color: "white",
-    marginLeft:20
+    marginLeft: 20,
   },
   buttonPressed: {
     opacity: 0.7, // Reduces opacity when pressed, giving it a "pressed" effect
