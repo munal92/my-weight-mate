@@ -1,106 +1,90 @@
-import React, { useEffect, useState } from "react";
-
+import React, { useCallback, useEffect, useState } from "react";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 import { NavigationContainer } from "@react-navigation/native";
 import { createStackNavigator } from "@react-navigation/stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
-import CarouselComponent from "./components/ui/CarouselComponent.js";
-import Home from "./screens/Home.js"; // Import the Home component
-import ProfilesScreen from "./screens/ProfilesScreen.js";
-import SettingsScreen from "./screens/SettingsScreen.js";
-import LoadingIndicator from "./helpers/LoadingIndicator.js";
+import { Ionicons } from "@expo/vector-icons";
+import { I18nextProvider, useTranslation } from "react-i18next";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Dimensions } from "react-native";
 import {
   useFonts,
   Barlow_300Light,
   Barlow_400Regular,
-  Barlow_700Bold,
-  Barlow_600SemiBold,
   Barlow_500Medium,
+  Barlow_600SemiBold,
+  Barlow_700Bold,
 } from "@expo-google-fonts/barlow";
-import { Ionicons } from "@expo/vector-icons";
-import { I18nextProvider } from "react-i18next";
+
+import CarouselComponent from "./components/ui/CarouselComponent.js";
+import Home from "./screens/Home.js";
+import ProfilesScreen from "./screens/ProfilesScreen.js";
+import SettingsScreen from "./screens/SettingsScreen.js";
+import ProfileDetailScreen from "./screens/ProfileDetailScreen.js";
+import ProfileEditScreen from "./screens/ProfileEditScreen.js";
+import LoadingIndicator from "./helpers/LoadingIndicator.js";
 import i18next from "./i18n";
-import { useTranslation } from "react-i18next";
 import colors from "./styles/colors.js";
+import { getDb } from "./db/database";
+import { ProfilesProvider } from "./state/ProfilesContext";
+import { EntitlementsProvider } from "./state/EntitlementsContext";
 
-import { Dimensions } from "react-native";
-import Profile from "./sql.js";
-import { initializeDb } from "./profileService.js";
-
-// Screen width
 const screenHeight = Dimensions.get("window").height;
+const ONBOARDING_KEY = "hasSeenOnboarding";
 
 const BottomTabs = createBottomTabNavigator();
 const Stack = createStackNavigator();
 
-function BottomTabsNavigator({ isLoading, setIsLoading }) {
-  
-
-
-  const { t, i18n } = useTranslation();
-
-
-
-
+function BottomTabsNavigator() {
+  const { t } = useTranslation();
 
   return (
     <BottomTabs.Navigator
       initialRouteName="Home"
       screenOptions={{
-        tabBarIcon: ({ color, size }) => (
-          <Ionicons
-            name="home"
-            size={26} // Increase icon size
-            color={color}
-          />
-        ),
+        headerShown: false,
         tabBarStyle: {
-          display: isLoading ? "none" : "flex", // Hide tab bar when loading
           backgroundColor: colors.bottomTabBlack,
           borderTopRightRadius: 30,
           borderTopLeftRadius: 30,
-          height: (20 * screenHeight) / 200, // Increase height of the tab bar
+          height: (20 * screenHeight) / 200,
           paddingTop: (3 * screenHeight) / 200,
         },
-        tabBarActiveTintColor: colors.background, // Set color when the tab is selected
-        tabBarInactiveTintColor: colors.textSecondary, // Set color when the tab is unselected
+        tabBarActiveTintColor: colors.background,
+        tabBarInactiveTintColor: colors.textSecondary,
       }}
     >
       <BottomTabs.Screen
-        name="Profiles" // Static screen name
+        name="Profiles"
         component={ProfilesScreen}
         options={{
-          headerShown: false,
           title: t("Profiles"),
           tabBarLabel: t("Profiles"),
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="people-sharp" size={28} color={color} /> // Increased size
+          tabBarIcon: ({ color }) => (
+            <Ionicons name="people-sharp" size={28} color={color} />
           ),
         }}
       />
       <BottomTabs.Screen
-        name="Home" // Static screen name
+        name="Home"
+        component={Home}
         options={{
-          headerShown: false,
           title: t("Home"),
           tabBarLabel: t("Home"),
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="home" size={28} color={color} /> // Increased size
+          tabBarIcon: ({ color }) => (
+            <Ionicons name="home" size={28} color={color} />
           ),
         }}
-      >
-        {(props) => (
-          <Home {...props} isLoading={isLoading} setIsLoading={setIsLoading} />
-        )}
-      </BottomTabs.Screen>
+      />
       <BottomTabs.Screen
-        name="Settings" // Static screen name
+        name="Settings"
         component={SettingsScreen}
         options={{
-          headerShown: false,
           title: t("Settings"),
           tabBarLabel: t("Settings"),
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="settings" size={28} color={color} /> // Increased size
+          tabBarIcon: ({ color }) => (
+            <Ionicons name="settings" size={28} color={color} />
           ),
         }}
       />
@@ -109,63 +93,95 @@ function BottomTabsNavigator({ isLoading, setIsLoading }) {
 }
 
 const App = () => {
-  useEffect(() => {
-    const setupDb = async () => {
-      await initializeDb();  // Initialize database and create tables
-    };
-    setupDb();
-  }, []);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isDbReady, setIsDbReady] = useState(false);
+  const [hasSeenOnboarding, setHasSeenOnboarding] = useState(null);
+  const [startupError, setStartupError] = useState(null);
+
   const [fontsLoaded] = useFonts({
     Barlow_300Light,
     Barlow_400Regular,
-    Barlow_700Bold,
-    Barlow_600SemiBold,
     Barlow_500Medium,
+    Barlow_600SemiBold,
+    Barlow_700Bold,
   });
 
-  // Render a loading screen while the fonts are loading
-  if (!fontsLoaded) {
+  useEffect(() => {
+    let cancelled = false;
+
+    const bootstrap = async () => {
+      try {
+        // getDb() opens the connection and runs any pending migrations.
+        await getDb();
+        const seen = await AsyncStorage.getItem(ONBOARDING_KEY);
+        if (cancelled) return;
+        setHasSeenOnboarding(seen === "true");
+        setIsDbReady(true);
+      } catch (error) {
+        if (!cancelled) setStartupError(error);
+      }
+    };
+
+    bootstrap();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const completeOnboarding = useCallback(async () => {
+    setHasSeenOnboarding(true);
+    try {
+      await AsyncStorage.setItem(ONBOARDING_KEY, "true");
+    } catch {
+      // Worst case the intro shows once more; not worth blocking on.
+    }
+  }, []);
+
+  if (startupError) {
+    return <LoadingIndicator message={String(startupError.message)} />;
+  }
+
+  if (!fontsLoaded || !isDbReady || hasSeenOnboarding === null) {
     return <LoadingIndicator />;
   }
 
-
-  return(
-    <Profile />
-  )
-
   return (
-    <NavigationContainer>
-      <Stack.Navigator
-        // initialRouteName="Carousel"
-        screenOptions={{ headerShown: false }}
-      >
-        {/* <Stack.Screen name="Carousel" component={CarouselComponent} /> */}
-        <Stack.Screen
-          name="BottomTabsNavigator"
-          options={{ headerShown: false }}
-        >
-          {(props) => (
-            <BottomTabsNavigator
-              {...props}
-              isLoading={isLoading}
-              setIsLoading={setIsLoading}
-            />
-          )}
-        </Stack.Screen>
-      </Stack.Navigator>
-    </NavigationContainer>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
+        <I18nextProvider i18n={i18next}>
+          <EntitlementsProvider>
+            <ProfilesProvider>
+              <NavigationContainer>
+                <Stack.Navigator screenOptions={{ headerShown: false }}>
+                  {!hasSeenOnboarding && (
+                    <Stack.Screen name="Carousel">
+                      {(props) => (
+                        <CarouselComponent
+                          {...props}
+                          onFinish={completeOnboarding}
+                        />
+                      )}
+                    </Stack.Screen>
+                  )}
+                  <Stack.Screen
+                    name="BottomTabsNavigator"
+                    component={BottomTabsNavigator}
+                  />
+                  <Stack.Screen
+                    name="ProfileDetail"
+                    component={ProfileDetailScreen}
+                  />
+                  <Stack.Screen
+                    name="ProfileEdit"
+                    component={ProfileEditScreen}
+                  />
+                </Stack.Navigator>
+              </NavigationContainer>
+            </ProfilesProvider>
+          </EntitlementsProvider>
+        </I18nextProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 };
 
 export default App;
-
-// Barlow_100Thin - Extra thin
-// Barlow_200ExtraLight - Very light
-// Barlow_300Light - Light
-// Barlow_400Regular - Regular (normal weight)
-// Barlow_500Medium - Medium weight
-// Barlow_600SemiBold - Semi-bold
-// Barlow_700Bold - Bold
-// Barlow_800ExtraBold - Extra bold
-// Barlow_900Black - Black (heaviest weight)

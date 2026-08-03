@@ -1,432 +1,261 @@
-import React, { useState, useEffect, useLayoutEffect } from "react";
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  Alert,
-  StyleSheet,
-  FlatList,
-} from "react-native";
-import { LineChart } from "react-native-chart-kit";
-import { Dimensions } from "react-native";
+import React, { useEffect, useMemo, useState } from "react";
+import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 import moment from "moment";
-
 import "moment/locale/tr";
 import "moment/locale/es";
+
 import colors from "../../styles/colors";
 import GraphView from "./GraphView";
+import { fromKg, getSpecies } from "../../domain/species";
+import { useEntitlements } from "../../state/EntitlementsContext";
 
-// Screen width
-const screenWidth = Dimensions.get("window").width;
+/**
+ * Weight chart with a switchable time window.
+ *
+ * Takes its data from props — it used to hold a hardcoded `mockData` array, so
+ * every profile showed the same invented 2024 numbers.
+ *
+ * For the long windows the entries are averaged per month before plotting.
+ * The old version emitted one label per month but one point per entry, so
+ * labels and points drifted out of alignment as soon as a month had more than
+ * one weigh-in.
+ */
 
-// Mock data for weight tracking
-const mockData = [
-  { date: "2024-05-01", weight: 70 },
-  { date: "2024-05-07", weight: 71 },
-  { date: "2024-05-15", weight: 69 },
-  { date: "2024-05-22", weight: 72 },
-  { date: "2024-06-01", weight: 70 },
-  { date: "2024-06-10", weight: 68 },
-  { date: "2024-06-15", weight: 70 },
-  { date: "2024-06-25", weight: 71 },
-  { date: "2024-07-05", weight: 69 },
-  { date: "2024-07-10", weight: 68 },
-  { date: "2024-08-01", weight: 71 },
-  { date: "2024-08-15", weight: 70 },
-  { date: "2024-08-20", weight: 72 },
-  { date: "2024-09-01", weight: 73 },
-  { date: "2024-09-05", weight: 74 },
-  { date: "2024-09-15", weight: 72 },
-  { date: "2024-10-15", weight: 72 },
-  { date: "2024-11-13", weight: 69.8 },
-  { date: "2024-11-14", weight: 69.9 },
-  { date: "2024-11-15", weight: 70.1 },
-  { date: "2024-11-16", weight: 70.2 },
-  { date: "2024-11-24", weight: 70.3 },
-  { date: "2024-11-26", weight: 70.4 },
-  { date: "2024-11-27", weight: 70.5 },
-  { date: "2024-11-20", weight: 70.6 },
-  { date: "2024-12-20", weight: 70.6 },
-];
+export const PERIODS = ["weekly", "monthly", "3 Months", "yearly"];
 
-const WeightGraphScreen = ({ isJustYearly = false }) => {
-  console.log(isJustYearly);
+const WeightGraphScreen = ({
+  entries = [],
+  speciesId,
+  isJustYearly = false,
+  onRequestUpgrade,
+}) => {
+  const { t, i18n } = useTranslation();
+  const { canUseChartPeriod } = useEntitlements();
+
   const [selectedPeriod, setSelectedPeriod] = useState(
     isJustYearly ? "yearly" : "weekly"
   );
-  const [filteredData, setFilteredData] = useState(mockData);
-  const { t, i18n } = useTranslation();
-  const [selectedPoint, setSelectedPoint] = useState(null);
-  const [currentWeek, setCurrentWeek] = useState(moment());
-  const [currentMonth, setCurrentMonth] = useState(moment());
-  const [currentYear, setCurrentYear] = useState(moment().year());
-  const [current3Months, setCurrent3Months] = useState(
-    moment().startOf("month").subtract(2, "months")
-  );
+  const [anchor, setAnchor] = useState(() => moment());
 
-  // // Ensure moment locale matches i18n.language
+  const species = getSpecies(speciesId);
+
   useEffect(() => {
-    console.log("GIRDI ", i18n.language);
-    moment.locale(i18n.language); // Set moment's locale dynamically
+    moment.locale(i18n.language);
   }, [i18n.language]);
 
-  // Filter data based on selected period
-  const filterData = (period) => {
-    let filtered = [...mockData];
-
-    switch (period) {
-      case "weekly": {
-        const startOfWeek = currentWeek.clone().startOf("isoWeek");
-        const endOfWeek = currentWeek.clone().endOf("isoWeek");
-        filtered = filtered.filter((entry) => {
-          const entryDate = moment(entry.date);
-          return entryDate.isBetween(startOfWeek, endOfWeek, null, "[]");
-        });
-        break;
-      }
-      case "monthly": {
-        const startOfMonth = currentMonth.clone().startOf("month");
-        const endOfMonth = currentMonth.clone().endOf("month");
-        filtered = filtered.filter((entry) => {
-          const entryDate = moment(entry.date);
-          return entryDate.isBetween(startOfMonth, endOfMonth, null, "[]");
-        });
-        break;
-      }
-      case "3 Months": {
-        const startOf3Months = current3Months.clone().startOf("month");
-        const endOf3Months = current3Months
-          .clone()
-          .add(2, "months")
-          .endOf("month");
-        filtered = filtered.filter((entry) => {
-          const entryDate = moment(entry.date);
-          return entryDate.isBetween(startOf3Months, endOf3Months, null, "[]");
-        });
-        break;
-      }
-      case "yearly": {
-        filtered = filtered.filter((entry) => {
-          const entryDate = moment(entry.date);
-          return entryDate.year() === currentYear;
-        });
-        break;
-      }
+  const range = useMemo(() => {
+    switch (selectedPeriod) {
+      case "monthly":
+        return {
+          start: anchor.clone().startOf("month"),
+          end: anchor.clone().endOf("month"),
+          step: "month",
+          aggregate: false,
+        };
+      case "3 Months":
+        return {
+          start: anchor.clone().subtract(2, "months").startOf("month"),
+          end: anchor.clone().endOf("month"),
+          step: "month",
+          stepSize: 3,
+          aggregate: true,
+        };
+      case "yearly":
+        return {
+          start: anchor.clone().startOf("year"),
+          end: anchor.clone().endOf("year"),
+          step: "year",
+          aggregate: true,
+        };
+      case "weekly":
       default:
-        break;
+        return {
+          start: anchor.clone().startOf("isoWeek"),
+          end: anchor.clone().endOf("isoWeek"),
+          step: "week",
+          aggregate: false,
+        };
     }
+  }, [selectedPeriod, anchor]);
 
-    // setFilteredData(filtered);
-    setFilteredData(
-      filtered.filter(
-        (entry) => typeof entry.weight === "number" && isFinite(entry.weight)
-      )
-    );
-  };
-
-  useEffect(() => {
-    filterData(selectedPeriod);
-    console.log("Current Language: ", i18n.language);
-  }, [selectedPeriod, currentWeek, currentMonth, currentYear, current3Months]);
-
-  // useLayoutEffect(() => {
-  //   moment.locale(i18n.language); // Update moment's locale based on the selected language
-  // }, [i18n.language]);
-
-  const [language, setLanguage] = useState(i18n.language);
-
-  useEffect(() => {
-    setLanguage(i18n.language); // Update state when language changes
-  }, [i18n.language]);
-
-  useEffect(() => {
-    moment.locale(language); // Update moment locale based on state
-  }, [language]);
-
-  // Format the date for labels
-  const formatDate = (date1) => {
-    const date = moment(date1);
-    if (i18n.language !== "en") {
-      return date.format("DD/MM");
-    }
-    return date.format("MM/DD");
-  };
-
-  // Change the week, month, or year
-  const changeWeek = (direction) => {
-    setCurrentWeek(currentWeek.clone().add(direction, "week"));
-  };
-
-  const changeMonth = (direction) => {
-    setCurrentMonth(currentMonth.clone().add(direction, "month"));
-  };
-
-  const changeYear = (direction) => {
-    setCurrentYear(currentYear + direction);
-  };
-
-  const change3Months = (direction) => {
-    setCurrent3Months(current3Months.clone().add(direction, "months"));
-  };
-
-  const generateyaxislabels = () => {
-    if (selectedPeriod === "3 Months" || selectedPeriod === "yearly") {
-      let monthlabels = [];
-      filteredData.map((entry) => {
-        if (!monthlabels.includes(moment(entry.date).format("MMM"))) {
-          monthlabels.push(moment(entry.date).format("MMM"));
-        }
+  /** Points in the selected window, already converted to the display unit. */
+  const points = useMemo(() => {
+    const inRange = entries
+      .filter((entry) => Number.isFinite(entry.weight))
+      .filter((entry) => {
+        const date = moment(entry.entry_date);
+        return date.isBetween(range.start, range.end, null, "[]");
       });
 
-      if (monthlabels.length > 8) {
-        const filteredMonths = monthlabels.filter((item, indx) => {
-          if (indx % 2 == 0) {
-            return item;
-          }
-        });
-        return filteredMonths;
-      }
-
-      return monthlabels;
+    if (!range.aggregate) {
+      return inRange.map((entry) => ({
+        label: moment(entry.entry_date).format(
+          i18n.language === "en" ? "MM/DD" : "DD/MM"
+        ),
+        value: fromKg(entry.weight, species.id),
+      }));
     }
 
-    return filteredData.map((entry) => formatDate(entry.date));
+    // One averaged point per month, so labels and values stay 1:1.
+    const buckets = new Map();
+    for (const entry of inRange) {
+      const key = moment(entry.entry_date).format("YYYY-MM");
+      const bucket = buckets.get(key) ?? { sum: 0, count: 0, key };
+      bucket.sum += entry.weight;
+      bucket.count += 1;
+      buckets.set(key, bucket);
+    }
+
+    return [...buckets.values()]
+      .sort((a, b) => a.key.localeCompare(b.key))
+      .map((bucket) => ({
+        label: moment(bucket.key, "YYYY-MM").format("MMM"),
+        value: fromKg(bucket.sum / bucket.count, species.id),
+      }));
+  }, [entries, range, species.id, i18n.language]);
+
+  const shiftPeriod = (direction) => {
+    const amount = range.stepSize ?? 1;
+    setAnchor((current) => current.clone().add(direction * amount, range.step));
   };
-  // Graph data for rendering the chart
+
+  const handlePeriodChange = (period) => {
+    if (!canUseChartPeriod(period)) {
+      onRequestUpgrade?.(period);
+      return;
+    }
+    setSelectedPeriod(period);
+    setAnchor(moment());
+  };
+
+  const periodLabel = useMemo(() => {
+    switch (selectedPeriod) {
+      case "monthly":
+        return range.start.format("MMMM YYYY");
+      case "3 Months":
+        return `${range.start.format("MMM")} - ${range.end.format("MMM YYYY")}`;
+      case "yearly":
+        return range.start.format("YYYY");
+      case "weekly":
+      default:
+        return `${range.start.format("MMM D")} - ${range.end.format("MMM D")}`;
+    }
+  }, [selectedPeriod, range]);
+
   const graphData = {
-    labels: generateyaxislabels(),
-    datasets: [
-      {
-        data: filteredData
-          .filter(
-            (entry) =>
-              typeof entry.weight === "number" && isFinite(entry.weight)
-          )
-          .map((entry) => entry.weight),
-      },
-    ],
+    labels: points.map((point) => point.label),
+    datasets: [{ data: points.map((point) => point.value) }],
   };
 
-  // Handle data point click to show more details
-  const handleDataPointClick = (data) => {
-    setSelectedPoint(data);
-    Alert.alert(
-      "Weight Value",
-      `Date: ${data.indexLabel}\nWeight: ${data.value}`
-    );
-  };
-
-  // Render period label
-  const renderPeriodLabel = () => {
-    if (selectedPeriod === "weekly") {
-      const startOfWeek = currentWeek
-        .clone()
-        .startOf("isoWeek")
-        .format("MMM D");
-      const endOfWeek = currentWeek.clone().endOf("isoWeek").format("MMM D");
-      return `${startOfWeek} - ${endOfWeek}`;
-    }
-    if (selectedPeriod === "monthly") {
-      return currentMonth.format("MMMM YYYY");
-    }
-    if (selectedPeriod === "3 Months") {
-      const startMonth = current3Months.clone().format("MMM");
-      const endMonth = current3Months.clone().add(2, "months").format("MMM");
-      return `${startMonth}-${endMonth}`;
-    }
-    if (selectedPeriod === "yearly") {
-      return `${currentYear}`;
-    }
-  };
-
-  if (isJustYearly) {
-    return (
-      <>
-        {filteredData.length === 0 ? (
-          <Text>No data found for this period</Text>
-        ) : (
-          <GraphView
-            graphData={graphData}
-            paddingR={55}
-            paddingL={50}
-            graphBgColor={colors.profileGraphbg}
-            labelTextColor="white"
-            gridColor="transparent"
-            lineColor="white"
-            dotColor="transparent"
-            graphPadding={10}
-          />
-        )}
-      </>
-    );
-  }
-
-  const renderCard = ({ item }) => {
-    return (
-      <View style={styles.card}>
-        <Text style={styles.date}>
-          {moment(item.date).format("dddd")}, {moment(item.date).format("MMMM")}{" "}
-          {moment(item.date).format("DD")}
-        </Text>
-        <Text style={styles.weight}>{item.weight} kg</Text>
+  const chart =
+    points.length === 0 ? (
+      <View style={styles.emptyChart}>
+        <Text style={styles.emptyText}>{t("No data found")}</Text>
       </View>
+    ) : (
+      <GraphView
+        graphData={graphData}
+        decimals={species.decimals}
+        height={isJustYearly ? 180 : 220}
+      />
     );
-  };
+
+  if (isJustYearly) return chart;
 
   return (
-    <View
-      style={{
-        flex: 1,
-        justifyContent: "flex-start",
-        padding: 20,
-        width: "100%",
-      }}
-    >
-      <Text style={{ fontSize: 20, marginBottom: 20 }}>ME</Text>
-
-      {/* Period buttons */}
-      <View
-        style={{
-          flexDirection: "row",
-          marginBottom: 20,
-          justifyContent: "space-between",
-          alignItems: "center",
-        }}
-      >
-        {["weekly", "monthly", "3 Months", "yearly"].map((period) => (
-          <TouchableOpacity
-            key={period}
-            style={{
-              backgroundColor: "transparent",
-
-              borderBottomLeftRadius: 5,
-              borderBottomRightRadius: 5,
-              borderBottomWidth: selectedPeriod === period ? 2 : 0,
-              borderBottomColor: colors.secondary,
-            }}
-            onPress={() => {
-              setSelectedPeriod(period);
-              filterData(period);
-            }}
-          >
-            <Text style={{ color: "black", marginBottom: 5 }}>
-              {t(period.charAt(0).toUpperCase() + period.slice(1))}
-            </Text>
-          </TouchableOpacity>
-        ))}
+    <View style={styles.container}>
+      <View style={styles.periodTabs}>
+        {PERIODS.map((period) => {
+          const isLocked = !canUseChartPeriod(period);
+          const isActive = period === selectedPeriod;
+          return (
+            <TouchableOpacity
+              key={period}
+              style={[styles.periodTab, isActive && styles.periodTabActive]}
+              onPress={() => handlePeriodChange(period)}
+            >
+              <Text
+                style={[
+                  styles.periodTabText,
+                  isActive && styles.periodTabTextActive,
+                ]}
+              >
+                {t(period)}
+              </Text>
+              {isLocked && (
+                <Ionicons
+                  name="lock-closed"
+                  size={11}
+                  color={isActive ? "white" : colors.textSecondary}
+                />
+              )}
+            </TouchableOpacity>
+          );
+        })}
       </View>
 
-      <FlatList
-        data={filteredData} // Pass your data here
-        renderItem={renderCard} // Card rendering function
-        keyExtractor={(item, index) => index.toString() + i18n.language} // Unique key for each item
-        contentContainerStyle={styles.listContainer} // Styling for the list container
-        showsVerticalScrollIndicator={false}
-        ListHeaderComponent={
-          <>
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                marginBottom: 20,
-              }}
-            >
-              <TouchableOpacity
-                style={{
-                  backgroundColor: "transparent",
+      <View style={styles.navRow}>
+        <TouchableOpacity onPress={() => shiftPeriod(-1)} hitSlop={12}>
+          <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
+        </TouchableOpacity>
+        <Text style={styles.periodLabel}>{periodLabel}</Text>
+        <TouchableOpacity onPress={() => shiftPeriod(1)} hitSlop={12}>
+          <Ionicons
+            name="chevron-forward"
+            size={22}
+            color={colors.textPrimary}
+          />
+        </TouchableOpacity>
+      </View>
 
-                  borderRadius: 5,
-                  width: 50,
-                  height: 30,
-                  justifyContent: "center",
-                }}
-                onPress={() => {
-                  if (selectedPeriod === "weekly") changeWeek(-1);
-                  else if (selectedPeriod === "monthly") changeMonth(-1);
-                  else if (selectedPeriod === "yearly") changeYear(-1);
-                  else if (selectedPeriod === "3 Months") change3Months(-3);
-                  filterData(selectedPeriod);
-                }}
-              >
-                <Text
-                  style={{ color: "black", fontSize: 24, fontWeight: "400" }}
-                >
-                  {"<"}
-                </Text>
-              </TouchableOpacity>
-
-              <Text
-                style={{
-                  flex: 1,
-                  textAlign: "center",
-                  fontSize: 16,
-                  fontWeight: "400",
-                }}
-              >
-                {renderPeriodLabel()}
-              </Text>
-
-              <TouchableOpacity
-                style={{
-                  backgroundColor: "transparent",
-
-                  justifyContent: "center",
-                  alignItems: "flex-end",
-                  borderRadius: 5,
-                  width: 50,
-                  height: 30,
-                }}
-                onPress={() => {
-                  if (selectedPeriod === "weekly") changeWeek(1);
-                  else if (selectedPeriod === "monthly") changeMonth(1);
-                  else if (selectedPeriod === "yearly") changeYear(1);
-                  else if (selectedPeriod === "3 Months") change3Months(3);
-                  filterData(selectedPeriod);
-                }}
-              >
-                <Text
-                  style={{ color: "black", fontSize: 24, fontWeight: "400" }}
-                >
-                  {">"}
-                </Text>
-              </TouchableOpacity>
-            </View>
-            {filteredData.length === 0 ? (
-              <Text>No data found for this period</Text>
-            ) : (
-              <GraphView graphData={graphData} />
-            )}
-          </>
-        }
-      />
+      {chart}
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  listContainer: {},
-  card: {
-    // backgroundColor: "#f8f8f8", // Light background for the card
-    // padding: 16, // Inner padding for content
-    marginVertical: 18, // Space between cards
-    borderRadius: 8, // Rounded corners
-    // shadowColor: "#000", // Shadow color
-    // shadowOffset: { width: 0, height: 2 }, // Shadow positioning
-    // shadowOpacity: 0.2, // Shadow transparency
-    // shadowRadius: 4, // Shadow blur radius
-    // elevation: 4, // Shadow for Android
+  container: { marginBottom: 20 },
+  periodTabs: {
+    flexDirection: "row",
+    gap: 6,
+    marginBottom: 12,
   },
-  date: {
-    fontSize: 16, // Font size for the date
-    fontWeight: "bold", // Bold text for the date
-    color: "#333", // Text color
-    marginBottom: 8, // Spacing below the date
+  periodTab: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    paddingVertical: 7,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.textSecondary,
   },
-  weight: {
-    fontSize: 14, // Font size for the weight
-    color: "#666", // Text color
+  periodTabActive: {
+    backgroundColor: colors.bottomTabBlack,
+    borderColor: colors.bottomTabBlack,
   },
+  periodTabText: { fontSize: 12, color: colors.textPrimary },
+  periodTabTextActive: { color: "white" },
+  navRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 6,
+  },
+  periodLabel: {
+    fontSize: 15,
+    fontFamily: "Barlow_600SemiBold",
+    color: colors.textPrimary,
+  },
+  emptyChart: {
+    height: 180,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  emptyText: { color: colors.textSecondary, fontSize: 14 },
 });
 
 export default WeightGraphScreen;
