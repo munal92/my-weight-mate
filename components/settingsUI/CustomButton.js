@@ -5,9 +5,14 @@ import { Ionicons } from "@expo/vector-icons";
 export default function CustomButton({
   btnText,
   notification_name = "notifications-outline",
+  onPress,
+  trailing,
 }) {
   return (
     <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={btnText}
       style={({ pressed }) => [
         styles.buttonContainer,
         pressed && styles.buttonPressed, // Apply this style when pressed
@@ -15,6 +20,7 @@ export default function CustomButton({
     >
       <Ionicons name={notification_name} size={24} color="white" />
       <Text style={styles.buttonText}>{btnText}</Text>
+      {trailing ? <View style={styles.trailing}>{trailing}</View> : null}
     </Pressable>
   );
 }
@@ -36,6 +42,10 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     color: "white",
     marginLeft: 20,
+    flex: 1,
+  },
+  trailing: {
+    marginLeft: 8,
   },
   buttonPressed: {
     opacity: 0.7, // Reduces opacity when pressed, giving it a "pressed" effect

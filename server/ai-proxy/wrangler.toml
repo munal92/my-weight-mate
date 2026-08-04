@@ -1,0 +1,17 @@
+name = "my-weight-mate-ai-proxy"
+main = "worker.js"
+compatibility_date = "2026-08-01"
+
+[vars]
+PREMIUM_ENTITLEMENT_ID = "premium"
+OPENAI_MODEL = "gpt-4o-mini"
+
+# Created with: wrangler kv namespace create RATE_LIMIT_KV
+# Paste the returned id below, then uncomment.
+# [[kv_namespaces]]
+# binding = "RATE_LIMIT_KV"
+# id = "<your-kv-namespace-id>"
+
+# Secrets are set with `wrangler secret put`, never in this file:
+#   OPENAI_API_KEY
+#   REVENUECAT_SECRET_KEY
