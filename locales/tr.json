@@ -54,6 +54,7 @@
   "Type": "Tür",
   "Date of Birth": "Doğum Tarihi",
   "Use the date format YYYY-MM-DD": "Tarih biçimi YYYY-AA-GG olmalı",
+  "Birth date cannot be in the future": "Doğum tarihi gelecekte olamaz",
   "Needed to show growth percentiles": "Büyüme persentili için gerekli",
   "Sex": "Cinsiyet",
   "Not specified": "Belirtilmedi",

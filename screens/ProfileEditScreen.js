@@ -21,6 +21,7 @@ import {
   getSpecies,
   parseWeightInput,
 } from "../domain/species";
+import { parseBirthDate } from "../domain/insights";
 import { createProfile, updateProfile } from "../db/profiles";
 import { useProfiles } from "../state/ProfilesContext";
 
@@ -55,8 +56,14 @@ const ProfileEditScreen = ({ navigation, route }) => {
   const validate = () => {
     if (!name.trim()) return t("Name is required");
 
-    if (birthDate.trim() && Number.isNaN(Date.parse(birthDate.trim()))) {
-      return t("Use the date format YYYY-MM-DD");
+    // Validated with the same parser the percentile uses, so a date that saves
+    // is always a date the insight can read. Date.parse would let `01/15/2026`
+    // and `2026-02-31` through and then quietly show no percentile.
+    if (birthDate.trim()) {
+      const born = parseBirthDate(birthDate.trim());
+      if (!born) return t("Use the date format YYYY-MM-DD");
+      // A future date saves fine but every age-based insight goes blank.
+      if (born.getTime() > Date.now()) return t("Birth date cannot be in the future");
     }
 
     if (heightCm.trim()) {

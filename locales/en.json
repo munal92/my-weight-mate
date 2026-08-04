@@ -54,6 +54,7 @@
   "Type": "Type",
   "Date of Birth": "Date of Birth",
   "Use the date format YYYY-MM-DD": "Use the date format YYYY-MM-DD",
+  "Birth date cannot be in the future": "Birth date cannot be in the future",
   "Needed to show growth percentiles": "Needed to show growth percentiles",
   "Sex": "Sex",
   "Not specified": "Not specified",

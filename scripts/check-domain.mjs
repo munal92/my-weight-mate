@@ -20,6 +20,12 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
+import {
+  BOYS_REFERENCE,
+  GIRLS_REFERENCE,
+  TOLERANCE_KG,
+} from "./fixtures/whoWeightForAgeReference.mjs";
+
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 /** Relative specifiers have to gain the .mjs extension the copies use. */
@@ -69,7 +75,11 @@ const dir = await stage();
 try {
   const species = await import(pathToFileURL(path.join(dir, "species.mjs")).href);
   const insights = await import(pathToFileURL(path.join(dir, "insights.mjs")).href);
+  const who = await import(
+    pathToFileURL(path.join(dir, "data/whoWeightForAge.mjs")).href
+  );
 
+  const { BOYS, GIRLS, hasGrowthData, lookupLms } = who;
   const { parseWeightInput, formatWeight, toKg, fromKg } = species;
   const {
     calculateBmi,
@@ -145,14 +155,113 @@ try {
 
   console.log("\nage");
   check("age in months respects the day of month", () => {
-    assert.equal(ageInMonths("2026-01-15", new Date("2026-08-14")), 6);
-    assert.equal(ageInMonths("2026-01-15", new Date("2026-08-15")), 7);
+    assert.equal(ageInMonths("2026-01-15", new Date(2026, 7, 14)), 6);
+    assert.equal(ageInMonths("2026-01-15", new Date(2026, 7, 15)), 7);
+  });
+  check("birth date is read as a local calendar date, not a UTC instant", () => {
+    // Regression, and a US-market one specifically: new Date("2025-01-01") is
+    // the 31st of December anywhere west of UTC, which made the day-of-month
+    // comparison below reach for the wrong month. Measuring on the last day of
+    // a month then reported a baby a whole month older than it is — and with
+    // month-based WHO rows, an extra month means the wrong percentile.
+    // Every birth date was affected on some measurement days; zero east of UTC.
+    assert.equal(ageInMonths("2025-01-01", new Date(2026, 0, 31)), 12);
+    assert.equal(ageInMonths("2025-01-01", new Date(2026, 2, 31)), 14);
+    assert.equal(ageInMonths("2025-06-01", new Date(2026, 6, 31)), 13);
+    // And the ordinary cases still hold.
+    assert.equal(ageInMonths("2026-03-01", new Date(2026, 8, 1)), 6);
+    assert.equal(ageInMonths("2026-03-01", new Date(2026, 2, 1)), 0);
+  });
+  check("an unparseable or impossible birth date returns null", () => {
+    assert.equal(ageInMonths("not-a-date"), null);
+    assert.equal(ageInMonths("2026-02-31"), null);
+    assert.equal(ageInMonths(""), null);
   });
 
   console.log("\ngrowth percentile");
-  check("returns null while the WHO table is unpopulated", () => {
-    // Guards the deliberate choice not to ship approximated reference data.
-    assert.equal(calculateGrowthPercentile(7.5, "2026-01-01", "male"), null);
+  check("L/M/S reproduce the published WHO weights for every month", () => {
+    // The strongest guard available without a network call: WHO publishes the
+    // -2SD/median/+2SD weights alongside the L/M/S parameters, and the weights
+    // are derived from the parameters. A mistyped, shifted or invented row
+    // cannot survive this. See scripts/fixtures/whoWeightForAgeReference.mjs.
+    const weightAtZ = (L, M, S, z) =>
+      L === 0 ? M * Math.exp(S * z) : M * Math.pow(1 + L * S * z, 1 / L);
+
+    const pairs = [
+      ["boys", BOYS, BOYS_REFERENCE],
+      ["girls", GIRLS, GIRLS_REFERENCE],
+    ];
+
+    for (const [label, table, reference] of pairs) {
+      assert.equal(table.length, reference.length, `${label}: row count`);
+
+      for (const [index, [month, at2neg, median, at2pos]] of reference.entries()) {
+        const [tableMonth, L, M, S] = table[index];
+        assert.equal(tableMonth, month, `${label}: month ${month} is out of order`);
+
+        for (const [z, published] of [[-2, at2neg], [0, median], [2, at2pos]]) {
+          const computed = weightAtZ(L, M, S, z);
+          assert.ok(
+            Math.abs(computed - published) <= TOLERANCE_KG,
+            `${label} month ${month} at z=${z}: published ${published} kg but ` +
+              `L/M/S give ${computed.toFixed(3)} kg`
+          );
+        }
+      }
+    }
+  });
+  check("the table covers birth to five years for both sexes", () => {
+    assert.equal(hasGrowthData(), true);
+    for (const table of [BOYS, GIRLS]) {
+      assert.equal(table.length, 61);
+      assert.equal(table[0][0], 0);
+      assert.equal(table[60][0], 60);
+    }
+  });
+  check("a baby at the median sits on the 50th percentile", () => {
+    // Boys, 0 months: WHO median is 3.3464 kg.
+    const result = calculateGrowthPercentile(3.3464, "2026-01-01", "male", new Date(2026, 0, 1));
+    assert.equal(result.ageMonths, 0);
+    assert.equal(result.zScore, 0);
+    assert.equal(result.percentile, 50);
+  });
+  check("two standard deviations land on the WHO 2nd and 98th percentiles", () => {
+    const born = "2026-01-01";
+    const at = new Date(2027, 0, 1); // 12 months
+    const { L, M, S } = lookupLms("female", 12);
+    const light = M * Math.pow(1 + L * S * -2, 1 / L);
+    const heavy = M * Math.pow(1 + L * S * 2, 1 / L);
+
+    const low = calculateGrowthPercentile(light, born, "female", at);
+    const high = calculateGrowthPercentile(heavy, born, "female", at);
+    assert.equal(low.ageMonths, 12);
+    assert.equal(low.zScore, -2);
+    assert.equal(high.zScore, 2);
+    // The normal CDF at ±2SD, which is what WHO's 2nd/98th columns represent.
+    assert.ok(Math.abs(low.percentile - 2.3) < 0.1, `got ${low.percentile}`);
+    assert.ok(Math.abs(high.percentile - 97.7) < 0.1, `got ${high.percentile}`);
+  });
+  check("sex selects a different reference curve", () => {
+    const at = new Date(2026, 6, 1); // 6 months
+    const boy = calculateGrowthPercentile(7.9, "2026-01-01", "male", at);
+    const girl = calculateGrowthPercentile(7.9, "2026-01-01", "female", at);
+    assert.equal(boy.ageMonths, 6);
+    // Girls are lighter at the median, so the same weight reads higher for them.
+    assert.ok(girl.percentile > boy.percentile, `${girl.percentile} vs ${boy.percentile}`);
+  });
+  check("we decline to answer outside the standards' range", () => {
+    // Past five years the weight-for-age standard stops; BMI-for-age takes over.
+    assert.equal(
+      calculateGrowthPercentile(20, "2020-01-01", "male", new Date(2026, 0, 1)),
+      null
+    );
+    // Unborn, and missing inputs.
+    assert.equal(
+      calculateGrowthPercentile(3.3, "2027-01-01", "male", new Date(2026, 0, 1)),
+      null
+    );
+    assert.equal(calculateGrowthPercentile(3.3, null, "male"), null);
+    assert.equal(calculateGrowthPercentile(0, "2026-01-01", "male"), null);
   });
 
   console.log("\nfacade");

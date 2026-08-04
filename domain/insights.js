@@ -83,10 +83,40 @@ const normalCdf = (z) => {
   return 0.5 * (1 + sign * y);
 };
 
+/**
+ * Parses a stored birth date as a LOCAL calendar date.
+ *
+ * `new Date("2026-01-01")` is midnight UTC, which in any negative-offset zone is
+ * the previous day locally — so a US user's baby born on the 1st reads as born
+ * on the 31st, and the month arithmetic below silently loses a month. A birth
+ * date is a calendar date, not an instant, so the components are read directly.
+ * Accepts a leading YYYY-MM-DD and ignores any time part.
+ *
+ * Exported so the profile form validates exactly what this can read. `Date.parse`
+ * is deliberately not used anywhere for this: it accepts `01/15/2026` and
+ * `2026-02-31`, which would save fine and then show no percentile at all.
+ */
+export const parseBirthDate = (value) => {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(value));
+  if (!match) return null;
+
+  const [, year, month, day] = match.map(Number);
+  const date = new Date(year, month - 1, day);
+  // Rejects impossible dates like 2026-02-31, which would otherwise roll over.
+  if (
+    date.getFullYear() !== year ||
+    date.getMonth() !== month - 1 ||
+    date.getDate() !== day
+  ) {
+    return null;
+  }
+  return date;
+};
+
 export const ageInMonths = (birthDate, at = new Date()) => {
   if (!birthDate) return null;
-  const born = new Date(birthDate);
-  if (Number.isNaN(born.getTime())) return null;
+  const born = parseBirthDate(birthDate);
+  if (!born) return null;
 
   const months =
     (at.getFullYear() - born.getFullYear()) * 12 +

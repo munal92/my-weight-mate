@@ -54,6 +54,7 @@
   "Type": "Tipo",
   "Date of Birth": "Fecha de nacimiento",
   "Use the date format YYYY-MM-DD": "Usa el formato AAAA-MM-DD",
+  "Birth date cannot be in the future": "La fecha de nacimiento no puede ser futura",
   "Needed to show growth percentiles": "Necesario para los percentiles de crecimiento",
   "Sex": "Sexo",
   "Not specified": "Sin especificar",

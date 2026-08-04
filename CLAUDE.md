@@ -14,29 +14,13 @@ species**: BMI for an adult, WHO growth percentile for an infant, body
 condition score for an animal. If you find yourself building generic weight
 features, you are building the commodity part.
 
-## FIRST: check whether the work is actually on GitHub
+## Where the work lives
 
-As of the last session the branch `claude/proje-degerlendirmesi-lnriay` had two
-commits that **could not be pushed** — that session's token was read-only
-(`403` on the git proxy, `403 Resource not accessible by integration` on the
-GitHub API) and the repo owner's plan does not expose the setting to change it.
-
-The commits were handed to the user as a `git bundle`. So:
-
-```bash
-git log --oneline main..claude/proje-degerlendirmesi-lnriay
-```
-
-- **Two commits show up** → the bundle was applied. Good, carry on.
-- **Nothing shows up** → the work is only in the user's downloaded bundle file.
-  Do not redo it. Ask the user to run:
-  ```bash
-  git fetch <path-to>/my-weight-mate-sdk57*.bundle \
-      claude/proje-degerlendirmesi-lnriay:claude/proje-degerlendirmesi-lnriay
-  ```
-
-If you also cannot push, do not fight it and do not retry a policy `403` — hand
-the user a fresh bundle instead (`git bundle create out.bundle main..HEAD`).
+Everything is on GitHub on the branch `claude/proje-degerlendirmesi-lnriay`,
+which is open as PR #6 against `main` and not yet merged. An earlier session
+could not push (read-only token) and handed the commits over as a `git bundle`;
+that bundle has since been applied and deleted, so GitHub is the only source of
+truth now. Pushing works from the user's machine with their own credentials.
 
 ## Layout
 
@@ -68,6 +52,16 @@ three `locales/*.json`. The profile form, unit handling, validation ranges and
 charts all derive from the registry. If you are hardcoding a species name
 anywhere else, that is a bug.
 
+**Birth dates go through `parseBirthDate`, never `new Date(string)` or
+`Date.parse`.** A `YYYY-MM-DD` string parses as midnight *UTC*, which is the
+previous day everywhere west of UTC — the app's primary market. That cost a US
+baby a whole month of age whenever a weight was logged near a month's end, and
+with month-indexed WHO rows a wrong month is a wrong percentile. It was invisible
+in `UTC+3`, so a Turkey-side test would never have caught it. `parseBirthDate`
+in `domain/insights.js` reads the components as a local calendar date and
+rejects impossible dates; the profile form validates with the same function so
+nothing can be saved that the insight then silently refuses to read.
+
 **i18n keys are English sentences.** `keySeparator` and `nsSeparator` are
 disabled in `i18n.js` because those sentences contain `.` and `:`. If you
 re-enable them, every key with punctuation silently stops resolving.
@@ -82,15 +76,18 @@ by design and fine. The OpenAI key lives only in the Worker.
 
 ## Deliberately incomplete — do not "fix" by guessing
 
-**`domain/data/whoWeightForAge.js` is empty on purpose.** The LMS z-score maths
-in `domain/insights.js` is finished and tested, but the WHO L/M/S reference
-values are medical data. They were not fetched because this environment's egress
-policy blocks `who.int` and its CDN, and they were not approximated because a
-wrong percentile shown to a parent is worse than no percentile. Consumers already
-handle the empty table by hiding the feature. Instructions for populating it are
-in that file. **This is the highest-value next task** — market research shows 57%
-of baby tracking apps already have percentile charts, so it is table stakes for
-that segment, not a differentiator.
+**`domain/data/whoWeightForAge.js` holds real WHO reference data — never edit a
+row by hand.** It carries the official weight-for-age L/M/S parameters for both
+sexes, months 0 to 60, so the percentile feature is live. The rows are guarded:
+`scripts/fixtures/whoWeightForAgeReference.mjs` holds WHO's own published
+−2SD/median/+2SD weights, and `npm run check:domain` recomputes those weights
+from L/M/S and fails if any row is off by more than 0.05 kg (the rounding of the
+published values). A mistyped or invented row cannot ship quietly. If the table
+ever needs replacing, regenerate both files together from the official source —
+approximating a value here would show a parent a confidently wrong percentile.
+
+Past 60 months the standard stops and `calculateGrowthPercentile` returns null;
+covering older children means adding BMI-for-age, which is a different standard.
 
 **There is no per-breed ideal weight table for pets, on purpose.** Within one
 species breed variation is far too wide (a 1 kg dwarf rabbit vs a 6 kg Flemish
@@ -105,15 +102,17 @@ are not destroyed. A profile lock should be rebuilt on `expo-local-authenticatio
 
 ## Next steps, in priority order
 
-1. **Populate the WHO table.** See above.
-2. **RevenueCat dashboard**: define products and the `premium` entitlement, then
+1. **RevenueCat dashboard**: define products and the `premium` entitlement, then
    fill `.env` from `.env.example`. Free until $2,500 monthly tracked revenue.
-3. **Deploy the AI proxy**: `server/ai-proxy/README.md`.
-4. **Pricing**: recommendation is ~$9.99/year as the headline offer plus a
+2. **Deploy the AI proxy**: `server/ai-proxy/README.md`.
+3. **Pricing**: recommendation is ~$9.99/year as the headline offer plus a
    ~$19.99 lifetime. The user asked for humble pricing; the research caveat is
    that a $1.99/month app needs 5x the subscribers of a $9.99 one, so do not go
    lower than this without a reason.
-5. Then: reminders/notifications, CSV export, photo attachments on entries.
+4. Then: reminders/notifications, CSV export, photo attachments on entries.
+
+Both 1 and 2 need accounts only the user can sign into, so they cannot be done
+from a session — bring them up rather than working around them.
 
 ## Verifying changes
 
